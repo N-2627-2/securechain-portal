@@ -8,10 +8,6 @@ services:
       POSTGRES_USER: securechain_admin
       POSTGRES_PASSWORD: securechain_secret
       POSTGRES_DB: securechain_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U securechain_admin -d securechain_db"]
       interval: 5s
@@ -41,7 +37,7 @@ services:
       dockerfile: Dockerfile
     container_name: securechain_frontend
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
     depends_on:
