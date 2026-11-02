@@ -51,7 +51,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
+            --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
             -t $ECR_REGISTRY/$ECR_PORTAL_REPO:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_PORTAL_REPO:latest ./frontend
           docker push $ECR_REGISTRY/$ECR_PORTAL_REPO:$IMAGE_TAG

@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
 export interface AlertPayload {
   alert_id: string;
@@ -17,9 +17,12 @@ export interface QuarantinePayload {
 }
 
 export async function checkBackendHealth() {
-  const response = await fetch(`${API_BASE_URL}/health`, { cache: 'no-store' });
+  const response = await fetch(`${API_BASE_URL}/health`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
+  });
   if (!response.ok) {
-    throw new Error('Backend service is unreachable');
+    throw new Error(`Backend service is unreachable (HTTP ${response.status})`);
   }
   return response.json();
 }
