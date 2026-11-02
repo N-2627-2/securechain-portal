@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
+    "http://securechain-alb-dev-263833044.us-east-1.elb.amazonaws.com",
     ]
 
     POSTGRES_SERVER: str = "localhost"
