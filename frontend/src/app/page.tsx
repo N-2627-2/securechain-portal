@@ -1,87 +1,154 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { checkBackendHealth, triggerQuarantine } from '@/lib/api';
+import { useState } from "react";
 
-export default function Home() {
-  const [health, setHealth] = useState<{ status: string; service: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [nodeId, setNodeId] = useState('');
-  const [quarantineResult, setQuarantineResult] = useState<string | null>(null);
+export default function NodeQuarantineForm() {
+  const [nodeId, setNodeId] = useState("");
+  const [reason, setReason] = useState("");
+  const [severity, setSeverity] = useState<"low" | "medium" | "high" | "critical">("medium");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [responseMsg, setResponseMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    checkBackendHealth()
-      .then(setHealth)
-      .catch((err) => setError(err.message));
-  }, []);
-
-  const handleQuarantine = async (e: React.FormEvent) => {
+  const handleIsolate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setQuarantineResult(null);
-    try {
-      const res = await triggerQuarantine({
-        node_id: nodeId,
-        reason: 'Manual SOC Operator Quarantine',
-        approved_by: 'operator@securechain.local',
+    if (!nodeId || !reason) return;
+
+    setLoading(true);
+    setResponseMsg(null);
+
+    if ((severity === "high" || severity === "critical") && !approvedBy) {
+      setResponseMsg({
+        type: "error",
+        text: "High or critical severity isolation requires an Approver Identity (email).",
       });
-      setQuarantineResult(`Quarantine active for node ${res.node_id} (ID: ${res.quarantine_id})`);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setQuarantineResult(`Error: ${err.message}`);
-      } else {
-        setQuarantineResult('An unexpected error occurred');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        alert_id: crypto.randomUUID(),
+        node_id: nodeId,
+        site_id: "warehouse-1",
+        reason: reason,
+        severity: severity,
+        approved_by: approvedBy || null,
+        expires_in_minutes: 60,
+      };
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+      const res = await fetch(`${apiUrl}/quarantine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorDetail = data.detail?.message || data.detail || "Failed to isolate node.";
+        throw new Error(errorDetail);
       }
+
+      setResponseMsg({
+        type: "success",
+        text: `Isolation started! Status: ${data.status} (Audit ID: ${data.audit_id})`,
+      });
+
+      setNodeId("");
+      setReason("");
+      setApprovedBy("");
+    } catch (err: any) {
+      setResponseMsg({ type: "error", text: err.message || "An unexpected error occurred." });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <header className="border-b border-slate-800 pb-4">
-          <h1 className="text-3xl font-bold tracking-tight text-emerald-400">SecureChain Portal</h1>
-          <p className="text-slate-400 text-sm mt-1">Decoupled Security Management & Asset Operations</p>
-        </header>
+    <div className="bg-slate-900 text-white p-6 rounded-lg max-w-lg mx-auto mt-8 border border-slate-800">
+      <h2 className="text-xl font-bold mb-4 text-emerald-400">Node Quarantine Action</h2>
+      
+      <form onSubmit={handleIsolate} className="flex flex-col gap-3">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Target Node ID or IP</label>
+          <input
+            type="text"
+            placeholder="e.g., sensor-wh1-0042 or 10.20.10.5"
+            value={nodeId}
+            onChange={(e) => setNodeId(e.target.value)}
+            className="w-full bg-slate-800 text-white border border-slate-700 px-3 py-2 rounded text-sm focus:outline-none focus:border-emerald-500"
+            disabled={loading}
+            required
+          />
+        </div>
 
-        {/* Backend Status Widget */}
-        <section className="bg-slate-900 p-6 rounded-lg border border-slate-800">
-          <h2 className="text-lg font-semibold mb-2">Backend Connection Status</h2>
-          {error ? (
-            <div className="text-red-400 text-sm">Status: Disconnected ({error})</div>
-          ) : health ? (
-            <div className="text-emerald-400 text-sm">
-              Status: Connected ({health.service} - {health.status.toUpperCase()})
-            </div>
-          ) : (
-            <div className="text-slate-400 text-sm">Checking status...</div>
-          )}
-        </section>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Isolation Reason</label>
+          <input
+            type="text"
+            placeholder="e.g., Unauthorized Modbus write detected"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full bg-slate-800 text-white border border-slate-700 px-3 py-2 rounded text-sm focus:outline-none focus:border-emerald-500"
+            disabled={loading}
+            required
+          />
+        </div>
 
-        {/* Action Panel */}
-        <section className="bg-slate-900 p-6 rounded-lg border border-slate-800">
-          <h2 className="text-lg font-semibold mb-4">Node Quarantine Action</h2>
-          <form onSubmit={handleQuarantine} className="flex gap-4 items-center">
-            <input
-              type="text"
-              placeholder="Enter Node IP / ID (e.g., 10.20.10.5)"
-              value={nodeId}
-              onChange={(e) => setNodeId(e.target.value)}
-              className="bg-slate-950 border border-slate-700 text-slate-100 px-4 py-2 rounded focus:outline-none focus:border-emerald-500 text-sm flex-1"
-              required
-            />
-            <button
-              type="submit"
-              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-medium transition"
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-slate-400 mb-1">Severity</label>
+            <select
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value as any)}
+              className="w-full bg-slate-800 text-white border border-slate-700 px-3 py-2 rounded text-sm focus:outline-none focus:border-emerald-500"
+              disabled={loading}
             >
-              Isolate Node
-            </button>
-          </form>
-          {quarantineResult && (
-            <div className="mt-4 p-3 bg-slate-950 border border-slate-800 rounded text-sm font-mono text-slate-300">
-              {quarantineResult}
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-xs text-slate-400 mb-1">
+              Approver Email {(severity === "high" || severity === "critical") && <span className="text-red-400">*</span>}
+            </label>
+            <input
+              type="email"
+              placeholder="ops.lead@example.com"
+              value={approvedBy}
+              onChange={(e) => setApprovedBy(e.target.value)}
+              className="w-full bg-slate-800 text-white border border-slate-700 px-3 py-2 rounded text-sm focus:outline-none focus:border-emerald-500"
+              disabled={loading}
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || !nodeId || !reason}
+          className="mt-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold py-2 rounded transition-colors text-sm"
+        >
+          {loading ? "Isolating Node..." : "Execute Node Isolation"}
+        </button>
+      </form>
+
+      {responseMsg && (
+        <div
+          className={`mt-4 p-3 rounded text-sm ${
+            responseMsg.type === "success"
+              ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+              : "bg-red-950 text-red-300 border border-red-800"
+          }`}
+        >
+          {responseMsg.text}
+        </div>
+      )}
+    </div>
   );
 }
