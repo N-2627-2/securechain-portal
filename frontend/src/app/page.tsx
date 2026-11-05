@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function NodeQuarantineForm() {
   const [nodeId, setNodeId] = useState("");
@@ -9,6 +9,20 @@ export default function NodeQuarantineForm() {
   const [approvedBy, setApprovedBy] = useState("");
   const [loading, setLoading] = useState(false);
   const [responseMsg, setResponseMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+        const res = await fetch(`${baseUrl}/health`);
+        setBackendOnline(res.ok);
+      } catch {
+        setBackendOnline(false);
+      }
+    };
+    checkHealth();
+  }, []);
 
   const handleIsolate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +51,7 @@ export default function NodeQuarantineForm() {
         expires_in_minutes: 60,
       };
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
       const res = await fetch(`${apiUrl}/quarantine`, {
         method: "POST",
@@ -68,8 +82,26 @@ export default function NodeQuarantineForm() {
   };
 
   return (
-    <div className="bg-slate-900 text-white p-6 rounded-lg max-w-lg mx-auto mt-8 border border-slate-800">
-      <h2 className="text-xl font-bold mb-4 text-emerald-400">Node Quarantine Action</h2>
+    <div className="bg-slate-900 text-white p-6 rounded-lg max-w-lg mx-auto mt-8 border border-slate-800 shadow-2xl">
+      {/* Backend Connection Indicator Header */}
+      <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+        <h2 className="text-xl font-bold text-emerald-400">Node Quarantine Action</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-400">Backend:</span>
+          <span
+            className={`inline-block w-2.5 h-2.5 rounded-full ${
+              backendOnline === null
+                ? "bg-yellow-500 animate-pulse"
+                : backendOnline
+                ? "bg-emerald-500"
+                : "bg-red-500"
+            }`}
+          />
+          <span className="text-xs font-mono text-slate-300">
+            {backendOnline === null ? "Checking..." : backendOnline ? "Connected" : "Disconnected"}
+          </span>
+        </div>
+      </div>
       
       <form onSubmit={handleIsolate} className="flex flex-col gap-3">
         <div>
