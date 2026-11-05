@@ -4,6 +4,7 @@ from typing import Optional, Literal
 from datetime import datetime, timezone, timedelta
 import uuid
 import logging
+import docker
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,6 @@ class QuarantineStatusResponse(BaseModel):
     status_code=status.HTTP_202_ACCEPTED
 )
 async def quarantine_node(payload: QuarantineRequest):
-    # Guardrail: High/Critical severity requires explicit approval
     if payload.severity in ["high", "critical"] and not payload.approved_by:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -45,7 +45,22 @@ async def quarantine_node(payload: QuarantineRequest):
             }
         )
 
-    logger.info(f"Accepted quarantine request for node '{payload.node_id}' under alert '{payload.alert_id}'")
+    logger.info(f"Executing REAL quarantine for node '{payload.node_id}'...")
+
+    try:
+        client = docker.DockerClient(base_url="unix://var/run/docker.sock")
+        target_container = client.containers.get(payload.node_id)
+        
+        networks = target_container.attrs["NetworkSettings"]["Networks"]
+        for net_name in list(networks.keys()):
+            network = client.networks.get(net_name)
+            network.disconnect(target_container)
+            logger.info(f"Disconnected node '{payload.node_id}' from network '{net_name}'")
+
+    except docker.errors.NotFound:
+        logger.warning(f"Container '{payload.node_id}' not found on Docker engine.")
+    except Exception as e:
+        logger.error(f"Error executing docker isolation via SDK: {str(e)}")
 
     now = datetime.now(timezone.utc)
     expires = now + timedelta(minutes=payload.expires_in_minutes)

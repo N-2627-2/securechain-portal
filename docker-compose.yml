@@ -19,6 +19,8 @@ services:
     container_name: securechain_backend
     ports:
       - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       POSTGRES_SERVER: db
       POSTGRES_PORT: 5432
