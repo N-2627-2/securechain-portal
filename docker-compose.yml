@@ -22,6 +22,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      ENVIRONMENT: "development"
+      AWS_REGION: "us-east-1"
+      QUARANTINE_SECURITY_GROUP_ID: "${QUARANTINE_SG_ID:-sg-00000000000000000}"
       POSTGRES_SERVER: db
       POSTGRES_PORT: 5432
       POSTGRES_USER: securechain_admin

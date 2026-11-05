@@ -2,9 +2,12 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, UUID4
 from typing import Optional, Literal
 from datetime import datetime, timezone, timedelta
+from botocore.exceptions import BotoCoreError, ClientError
 import uuid
 import logging
 import docker
+import os
+import boto3
 
 logger = logging.getLogger(__name__)
 
@@ -73,3 +76,27 @@ async def quarantine_node(payload: QuarantineRequest):
         expires_at=expires.isoformat(),
         audit_id=f"audit-{uuid.uuid4().hex[:8]}"
     )
+
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") == "production"
+QUARANTINE_SG_ID = os.getenv("QUARANTINE_SECURITY_GROUP_ID", "")
+
+def apply_aws_ec2_quarantine(instance_id: str):
+    """
+    Swaps an EC2 instance's active Security Groups with the isolated Quarantine Security Group.
+    """
+    if not QUARANTINE_SG_ID:
+        logger.error("QUARANTINE_SECURITY_GROUP_ID environment variable is not set.")
+        return False
+
+    ec2_client = boto3.client("ec2", region_name=os.getenv("AWS_REGION", "us-east-1"))
+    
+    try:
+        response = ec2_client.modify_instance_attribute(
+            InstanceId=instance_id,
+            Groups=[QUARANTINE_SG_ID]
+        )
+        logger.info(f"Successfully applied Quarantine SG {QUARANTINE_SG_ID} to instance {instance_id}")
+        return True
+    except (BotoCoreError, ClientError) as err:
+        logger.error(f"Failed to isolate AWS EC2 instance {instance_id}: {str(err)}")
+        return False
